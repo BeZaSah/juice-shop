@@ -1,0 +1,49 @@
+name: Bogazici-DevSecOps-Pipeline
+on:
+  push:
+    branches:
+      - master        # GitHub yeni repolarda main kullanır; main ise burayı main yapın
+  pull_request:
+jobs:
+  build-and-syft:
+    name: Build & Syft
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Build Docker image
+        run: |
+          docker build -t juice-shop:${{ github.sha }} .
+      - name: Syft SBOM Scan
+        uses: anchore/sbom-action@v0
+        with:
+          image: "juice-shop:${{ github.sha }}"
+          output-file: "sbom.spdx.json"
+          format: "spdx-json"
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v3
+        with:
+          name: sbom
+          path: sbom.spdx.json
+  semgrep-sast:
+    name: Run Semgrep SAST
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - name: Install Semgrep
+        run: |
+          python -m pip install --upgrade pip
+          pip install semgrep
+      - name: Run Semgrep scan
+        run: |
+          semgrep --config auto --json --output=semgrep-report.json || true
+      - name: Upload Semgrep Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: semgrep-report
+          path: semgrep-report.json
